@@ -1,0 +1,39 @@
+#!/bin/bash
+#Deploy Inf:
+
+logFile='/tmp/deploy.out.txt'
+
+#Create Resource Group
+az group create --name tty1_RG --location eastus > $logFile
+
+#Create vnet and subnet
+az network vnet create -g tty1_RG -n tty1_vnet --address-prefix 10.0.0.0/16 --subnet-name tty1_subnet1 --subnet-prefix 10.0.0.0/24 > $logFile
+
+#Create Container #1
+az container create --resource-group tty1_RG --name tty1-cont1 --image  elopezcenfo/ttyimage:v1 --vnet tty1_vnet --subnet tty1_subnet1 > $logFile
+
+#Public IP:
+az network public-ip create --resource-group tty1_RG --name tty1_PublicIP --sku Standard > $logFile
+
+#LoadBalancer
+az network lb create -g tty1_RG -n tty1_LB --sku Standard --public-ip-address tty1_PublicIP > $logFile
+
+#Backend Pool Address:
+az network lb address-pool create -g tty1_RG --lb-name tty1_LB -n tty1_BackendPool > $logFile
+
+#Probe
+az network lb probe create --resource-group tty1_RG --lb-name tty1_LB --name tty1_Probe --protocol tcp --port 80 > $logFile
+
+#Get Container IP
+contIP=$(az container show --name tty1-cont1 --resource-group tty1_RG --query ipAddress.ip --output tsv) > $logFile
+
+#Backend pool:
+az network lb address-pool address add -g tty1_RG --lb-name tty1_LB --pool-name tty1_BackendPool -n tty1-add1 --vnet tty1_vnet --ip-address $contIP > $logFile
+
+#LB Rule:
+az network lb rule create --resource-group tty1_RG --lb-name tty1_LB --name tty1_LBRule1 --protocol tcp --frontend-port 80 --backend-port 80 --backend-pool-name tty1_BackendPool --probe-name tty1_Probe --idle-timeout 4 --enable-tcp-reset true > $logFile
+
+#Get Public IP:
+publicIP=$(az network public-ip show --resource-group tty1_RG --name tty1_PublicIP --query ipAddress --output tsv)
+echo "LB_Public_IP:"   
+echo $publicIP

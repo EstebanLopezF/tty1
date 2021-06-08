@@ -1,0 +1,17 @@
+#!/bin/bash
+#Add new containers:
+
+logFile='/tmp/deploy.out.txt'
+
+#Count Containers.
+countCont=$(az container list --resource-group tty1_RG | grep -i "environmentVariables" | wc -l) 
+sum=$(( $countCont + 1 )) 
+
+#Create Container #2
+az container create --resource-group tty1_RG --name tty1-cont$sum --image elopezcenfo/ttyimage:v2 --vnet tty1_vnet --subnet tty1_subnet1 > $logFile
+
+#Get Container IP
+contIP=$(az container show --name tty1-cont2 --resource-group tty1_RG --query ipAddress.ip --output tsv) > $logFile
+
+#Backend pool:
+az network lb address-pool address add -g tty1_RG --lb-name tty1_LB --pool-name tty1_BackendPool -n tty1-add$sum --vnet tty1_vnet --ip-address "$contIP" > $logFile
