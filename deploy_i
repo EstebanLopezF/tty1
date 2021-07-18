@@ -2,38 +2,88 @@
 #Deploy Inf:
 
 logFile='/tmp/deploy.out.txt'
+cp /dev/null /tmp/deploy.out.txt
+
+RG='tty1_RG'
+Vnet='tty1_vnet'
+SubNet1='tty1_subnet1'
+SubNet2='tty1_subnet2'
+SubNet3='tty1_subnet3'
+FrontContImage='elopezcenfo/ttyimage:v1'
+FrontCont='tty1-cont1'
+BackCont='tty1-contb1'
+FrontLoadBal='tty1_LB'
+BackLoadBal='tty1_LB2'
+PublicIP='tty1_PublicIP'
+FrontPool='tty1_BackendPool'
+BackPool='tty1_BackendPool2'
+FrontProbe='tty1_Probe'
+BackProbe='tty1_Probe2'
+
+
+echo "`date +%y/%m/%d_%H:%M:%S`: Starting Deployment of Resources"
 
 #Create Resource Group
-az group create --name tty1_RG --location eastus > $logFile
+az group create --name $RG --location eastus >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Resource Group Created.." 
 
 #Create vnet and subnet
-az network vnet create -g tty1_RG -n tty1_vnet --address-prefix 10.0.0.0/16 --subnet-name tty1_subnet1 --subnet-prefix 10.0.0.0/24 > $logFile
+az network vnet create -g $RG -n $Vnet --address-prefix 10.0.0.0/16 --subnet-name $SubNet1 --subnet-prefix 10.0.0.0/24 >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Vnet and Subnet Created.." 
 
-#Create Container #1
-az container create --resource-group tty1_RG --name tty1-cont1 --image  elopezcenfo/ttyimage:v1 --vnet tty1_vnet --subnet tty1_subnet1 > $logFile
+#Create Frontend Container #1
+az container create --resource-group $RG --name $FrontCont --image elopezcenfo/ttyimage:v1 --vnet $Vnet --subnet $SubNet1 >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Frontend Container Created.."
 
 #Public IP:
-az network public-ip create --resource-group tty1_RG --name tty1_PublicIP --sku Standard > $logFile
+az network public-ip create --resource-group $RG --name $PublicIP --sku Standard >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Public IP Created.." 
 
 #LoadBalancer
-az network lb create -g tty1_RG -n tty1_LB --sku Standard --public-ip-address tty1_PublicIP > $logFile
+az network lb create -g $RG -n $FrontLoadBal --sku Standard --public-ip-address $PublicIP >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Frontend LoadBalancer Created.." 
 
 #Backend Pool Address:
-az network lb address-pool create -g tty1_RG --lb-name tty1_LB -n tty1_BackendPool > $logFile
+az network lb address-pool create -g $RG --lb-name $FrontLoadBal -n $FrontPool >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Backed Pool Address Created.."
 
 #Probe
-az network lb probe create --resource-group tty1_RG --lb-name tty1_LB --name tty1_Probe --protocol tcp --port 80 > $logFile
+az network lb probe create --resource-group $RG --lb-name $FrontLoadBal --name $FrontProbe --protocol tcp --port 80 >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Health Probe Status Created.." 
 
 #Get Container IP
-contIP=$(az container show --name tty1-cont1 --resource-group tty1_RG --query ipAddress.ip --output tsv) > $logFile
+contIP=$(az container show --name $FrontCont --resource-group $RG --query ipAddress.ip --output tsv) 
 
 #Backend pool:
-az network lb address-pool address add -g tty1_RG --lb-name tty1_LB --pool-name tty1_BackendPool -n tty1-add1 --vnet tty1_vnet --ip-address $contIP > $logFile
+az network lb address-pool address add -g $RG --lb-name $FrontLoadBal --pool-name $FrontPool -n tty1-add1 --vnet $Vnet --ip-address $contIP >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Container IP Added to Backend Pool.." 
 
 #LB Rule:
-az network lb rule create --resource-group tty1_RG --lb-name tty1_LB --name tty1_LBRule1 --protocol tcp --frontend-port 80 --backend-port 80 --backend-pool-name tty1_BackendPool --probe-name tty1_Probe --idle-timeout 4 --enable-tcp-reset true > $logFile
+az network lb rule create --resource-group $RG --lb-name $FrontLoadBal --name tty1_LBRule1 --protocol tcp --frontend-port 80 --backend-port 80 --backend-pool-name $FrontPool --probe-name $FrontProbe --idle-timeout 4 --enable-tcp-reset true >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: LoadBalancer Rule Created.." 
+
+
+
+#Backend Section:
+
+#Add Backend Subnets
+az network vnet subnet create -g $RG --vnet-name $Vnet -n $SubNet2 --address-prefixes 10.0.1.0/24 >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Backend Subnet 1 Created.." 
+az network vnet subnet create -g $RG --vnet-name $Vnet -n $SubNet3 --address-prefixes 10.0.2.0/24 >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Backend Subnet 2 Created.." 
+
+#Create Backend Internal LoadBalancer
+az network lb create -g $RG -n $BackLoadBal --sku Standard --vnet-name $Vnet --subnet $SubNet2 --private-ip-address 10.0.1.4 >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Internal Load Balancer.." 
+
+#Create Backend Internal Pool.
+az network lb address-pool create -g $RG --lb-name $BackLoadBal -n $BackPool >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Internal Backend Pool Created.." 
+
+#Create Backend Internal Probe.
+az network lb probe create --resource-group $RG --lb-name $BackLoadBal --name $BackProbe --protocol tcp --port 80 >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Backend Probe Created.." 
+
+#Create Backend LB Rule.
+az network lb rule create --resource-group $RG --lb-name $BackLoadBal --name tty1_LBRule2 --protocol tcp --frontend-port 80 --backend-port 80 --backend-pool-name $BackPool --probe-name $BackProbe --idle-timeout 4 --enable-tcp-reset true >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Backend LoadBalancer Rule Created.." 
+
+#Create Backend Container #1
+az container create --resource-group $RG --name $BackCont --image elopezcenfo/ttyimage:v1 --vnet $Vnet --subnet $SubNet3 >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Backend Container Created.." 
+
+#Get Container IP
+contIPB=$(az container show --name $BackCont --resource-group $RG --query ipAddress.ip --output tsv) 
+
+#Add Backend pool:
+az network lb address-pool address add -g $RG --lb-name $BackLoadBal --pool-name $BackPool -n tty1-addb1 --vnet $Vnet --ip-address "$contIPB" >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Backend Container Added to the LB Pool.." 
+
 
 #Get Public IP:
-publicIP=$(az network public-ip show --resource-group tty1_RG --name tty1_PublicIP --query ipAddress --output tsv)
+publicIP=$(az network public-ip show --resource-group $RG --name $PublicIP --query ipAddress --output tsv) >> $logFile 
 echo "LB_Public_IP:"   
 echo $publicIP
