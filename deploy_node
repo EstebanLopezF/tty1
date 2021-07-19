@@ -6,7 +6,7 @@ logFile='/tmp/deploy.out.txt'
 RG='tty1_RG'
 Vnet='tty1_vnet'
 SubNet1='tty1_subnet1'
-FrontContImage='elopezcenfo/ttyimage:v1'
+FrontContImage='elopezcenfo/ttyimage:v2'
 FrontLoadBal='tty1_LB'
 FrontPool='tty1_BackendPool'
 
