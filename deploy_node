@@ -1,17 +1,29 @@
 #!/bin/bash
-#Add new containers:
+#Add new Frontend Containers:
 
 logFile='/tmp/deploy.out.txt'
 
+RG='tty1_RG'
+Vnet='tty1_vnet'
+SubNet1='tty1_subnet1'
+FrontContImage='elopezcenfo/ttyimage:v1'
+FrontLoadBal='tty1_LB'
+FrontPool='tty1_BackendPool'
+
+
+echo "`date +%y/%m/%d_%H:%M:%S`: Starting Deployment of Resources"
+
 #Count Containers.
-countCont=$(az container list --resource-group tty1_RG | grep -i "environmentVariables" | wc -l) 
-sum=$(( $countCont + 1 )) 
+countCont=$(az container list --resource-group $RG | grep -i "environmentVariables" | wc -l)
+sum=$(( $countCont + 1 ))
 
 #Create Container #2
-az container create --resource-group tty1_RG --name tty1-cont$sum --image elopezcenfo/ttyimage:v2 --vnet tty1_vnet --subnet tty1_subnet1 > $logFile
+az container create --resource-group $RG --name tty1-cont$sum --image elopezcenfo/ttyimage:v2 --vnet $Vnet --subnet $SubNet1 >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Container Created.."
 
 #Get Container IP
-contIP=$(az container show --name tty1-cont2 --resource-group tty1_RG --query ipAddress.ip --output tsv) > $logFile
+contIP=$(az container show --name tty1-cont$sum --resource-group $RG --query ipAddress.ip --output tsv) >> $logFile
 
 #Backend pool:
-az network lb address-pool address add -g tty1_RG --lb-name tty1_LB --pool-name tty1_BackendPool -n tty1-add$sum --vnet tty1_vnet --ip-address "$contIP" > $logFile
+az network lb address-pool address add -g $RG --lb-name $FrontLoadBal --pool-name $FrontPool -n tty1-add$sum --vnet $Vnet --ip-address "$contIP" >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Container IP Added to LB Backend Pool.."
+
+exit 0;
