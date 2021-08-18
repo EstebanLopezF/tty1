@@ -18,7 +18,7 @@ countCont=$(az container list --resource-group $RG | grep -i "environmentVariabl
 sum=$(( $countCont + 1 ))
 
 #Create Container #2
-az container create --resource-group $RG --name tty1-cont$sum --image elopezcenfo/ttyimage:v2 --vnet $Vnet --subnet $SubNet1 >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Container Created.."
+az container create --resource-group $RG --name tty1-cont$sum --image elopezcenfo/ttyimage:v3 --vnet $Vnet --subnet $SubNet1 >> $logFile && echo "`date +%y/%m/%d_%H:%M:%S`: Container Created.."
 
 #Get Container IP
 contIP=$(az container show --name tty1-cont$sum --resource-group $RG --query ipAddress.ip --output tsv) >> $logFile
